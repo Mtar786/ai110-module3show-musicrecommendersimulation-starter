@@ -11,23 +11,71 @@ Your goal is to:
 - Evaluate what your system gets right and wrong
 - Reflect on how this mirrors real world AI recommenders
 
-Replace this paragraph with your own summary of what your version does.
+This simulation builds a content-based music recommender in Python. It represents songs and a user taste profile as data objects, scores each song using weighted rules based on genre, mood, and energy, and returns a ranked list of top recommendations. The goal is to mirror how real platforms like Spotify decide what to suggest next, but in a small, transparent, and explainable way.
 
 ---
 
 ## How The System Works
 
-Explain your design in plain language.
+Real-world platforms like Spotify combine two approaches: **collaborative filtering** (recommending based on what similar users listened to) and **content-based filtering** (matching song attributes to your preferences). This simulation focuses on content-based filtering — no user history needed.
 
-Some prompts to answer:
+### Song Features
 
-- What features does each `Song` use in your system
-  - For example: genre, mood, energy, tempo
-- What information does your `UserProfile` store
-- How does your `Recommender` compute a score for each song
-- How do you choose which songs to recommend
+Each `Song` object stores:
 
-You can include a simple diagram or bullet list if helpful.
+| Feature | Type | Description |
+|---------|------|-------------|
+| `genre` | string | Musical genre (pop, lofi, rock, jazz, metal, etc.) |
+| `mood` | string | Listening context (happy, chill, intense, moody, etc.) |
+| `energy` | float 0–1 | How active or driving the song feels |
+| `tempo_bpm` | float | Beats per minute |
+| `valence` | float 0–1 | Musical positivity/brightness |
+| `danceability` | float 0–1 | How suitable the track is for dancing |
+| `acousticness` | float 0–1 | Organic/acoustic vs. electronic |
+
+The catalog (`data/songs.csv`) contains **20 songs** spanning pop, lofi, rock, jazz, electronic, classical, country, folk, r&b, punk, metal, ambient, synthwave, and world music.
+
+### User Profile
+
+Each `UserProfile` stores:
+- `favorite_genre` — preferred genre string
+- `favorite_mood` — preferred mood string
+- `target_energy` — ideal energy level (0.0–1.0)
+- `likes_acoustic` — boolean preference for acoustic tracks
+
+### Algorithm Recipe (Scoring Rule)
+
+The `Recommender` assigns a score to every song in the catalog:
+
+```
+score = 0
+if song.genre == user.favorite_genre:          score += 3.0   # genre match (highest weight)
+if song.mood  == user.favorite_mood:           score += 2.0   # mood match
+score += (1 - |song.energy - user.target_energy|) * 2.0       # energy proximity (0–2 pts)
+if user.likes_acoustic:
+    score += song.acousticness * 1.0                          # acoustic bonus (0–1 pts)
+```
+
+**Max possible score: 8.0.** Songs are sorted highest-to-lowest and the top-k are returned.
+
+**Why these weights?** Genre is weighted highest (3.0) because it's the broadest taste signal. Mood (2.0) captures listening context. Energy proximity rewards closeness, not just high or low values — a user wanting energy=0.4 is penalized for energy=0.9. Acousticness is optional and lower-weighted since it's a secondary preference.
+
+> **Expected bias:** Because genre has the highest weight, users with a rare genre in the catalog (e.g., classical) will hit a ceiling faster than pop or lofi listeners who have more matching songs. This may cause the system to over-recommend within popular genres.
+
+### Data Flow
+
+```mermaid
+flowchart TD
+    A[User Profile\ngenre · mood · energy · likes_acoustic] --> B[Load songs.csv\n20 songs]
+    B --> C{For each song}
+    C --> D[Genre match?\n+3.0 pts]
+    C --> E[Mood match?\n+2.0 pts]
+    C --> F[Energy proximity\n0–2.0 pts]
+    C --> G[Acoustic bonus\n0–1.0 pts]
+    D & E & F & G --> H[Total Score per Song]
+    H --> I[Sort all songs\nhighest score first]
+    I --> J[Return Top-K\nRecommendations]
+```
 
 ---
 
@@ -68,25 +116,22 @@ You can add more tests in `tests/test_recommender.py`.
 
 ## Experiments You Tried
 
-Use this section to document the experiments you ran. For example:
+*(To be filled in after Phase 2 implementation)*
 
-- What happened when you changed the weight on genre from 2.0 to 0.5
+- What happened when you changed the weight on genre from 3.0 to 0.5
 - What happened when you added tempo or valence to the score
-- How did your system behave for different types of users
+- How did your system behave for different types of users (high-energy vs. chill)
 
 ---
 
 ## Limitations and Risks
 
-Summarize some limitations of your recommender.
-
-Examples:
-
-- It only works on a tiny catalog
-- It does not understand lyrics or language
-- It might over favor one genre or mood
-
-You will go deeper on this in your model card.
+- The catalog has only 10 songs, so results are heavily constrained by what's available
+- It does not consider listening history, skips, or replays — every session starts fresh
+- Genre and mood are exact string matches, so "pop" and "indie pop" are treated as completely different
+- It does not understand lyrics, language, or cultural context
+- High weight on genre match may create a "filter bubble" where users only see one genre
+- Users with niche tastes (e.g., jazz) get fewer matches due to underrepresentation in the catalog
 
 ---
 
@@ -96,10 +141,11 @@ Read and complete `model_card.md`:
 
 [**Model Card**](model_card.md)
 
-Write 1 to 2 paragraphs here about what you learned:
+*(To be filled in after completing the model card)*
 
-- about how recommenders turn data into predictions
-- about where bias or unfairness could show up in systems like this
+Building this system revealed how recommenders reduce a person's taste to a small set of numbers and categorical labels. Even a simple scoring rule makes consequential decisions — like which feature matters most — that determine what a user sees. Assigning genre a higher weight than mood means the system prioritizes "what kind of music" over "how it makes you feel," which may not match every user's experience.
+
+Bias can emerge quietly. A catalog with mostly pop and lofi songs will naturally serve pop and lofi listeners better, not because the algorithm is broken, but because the data reflects the choices of whoever built it. Real platforms face this at massive scale: the music that gets recommended gets played, which generates more data, which reinforces the same recommendations — a feedback loop that can crowd out less popular genres entirely.
 
 
 ---
